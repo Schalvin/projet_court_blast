@@ -1,0 +1,9 @@
+name: blast
+channels:
+    - conda-forge
+    - bioconda
+    - nodefaults
+dependencies:
+    - python
+    - biopython
+
