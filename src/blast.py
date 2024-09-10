@@ -36,8 +36,8 @@ def aa_sub_score(aa1, aa2):
     """
     i = MATRIX.alphabet.index(aa1)
     j = MATRIX.alphabet.index(aa2)
-    tscore = MATRIX[i][j]
-    return tscore
+    score = MATRIX[i][j]
+    return score
 
 # def close_words_gen(word):
 #    word
@@ -54,7 +54,7 @@ def seq_to_words(seq):
     """
 
     words = {}
-    for i in range(0, len(seq)-WORD_LEN):
+    for i in range(0, len(seq)-WORD_LEN+1):
         word = seq[i:i+WORD_LEN]
         if word not in words:
             words[word] = []
@@ -65,24 +65,24 @@ def seq_to_words(seq):
 
 
 def double_hit_finder(words, seq):
-    """Get all non over-lapping, double hits with maximum distance between first position of hit of MAX_HITS_GAP_LEN. 
+    """Get all non over-lapping, double hits with maximum distance between first position of hit of MAX_HITS_GAP_LEN.
 
     Args:
         words (dict): keys are words of length constant WORD_LEN, values are positions in the query sequence. generated using the seq_to_words() function
         seq (str): sequence to find hits in
     Returns:
-        list: list of all double hits found in seq in the form of a tuple with 
-            poss1 - position on sequence in first hit 
+        list: list of all double hits found in seq in the form of a tuple with
+            poss1 - position on sequence in first hit
             posq1 - position on query in first hit
             poss2 - position on sequence in second hit
             posq2 - position on query in second hit
     """
     hits = {}
     double_hits = [seq]
-    for i in range(0, len(seq)-WORD_LEN):
+    for i in range(0, len(seq)):
         wordseq = seq[i:i+WORD_LEN]
         if wordseq in words:
-            diags = [int(j)-i for j in words[wordseq]]
+            diags = [j-i for j in words[wordseq]]
             for diag in diags:
                 if diag not in hits:
                     # tuple containing the pos in the db seq followed by the pos in the query seq
@@ -97,6 +97,19 @@ def double_hit_finder(words, seq):
     return double_hits
 
 
+def double_hit_fuser(double_hits):
+    i = 2
+    while i < len(double_hits):
+        poss1_1, posq1_1, poss2_1, posq2_1 = double_hits[i-1]
+        poss1_2, posq1_2, poss2_2, posq2_2 = double_hits[i]
+        if (posq2_1 == posq1_2) & (poss2_1 == poss1_2):
+            double_hits[i-1] = (poss1_1, posq1_1, poss2_2, posq2_2)
+            del double_hits[i]
+        else:
+            i += 1
+    return double_hits
+
+
 def db_search(dbf, words):
     """Search of words in a sequence database in fasta format
 
@@ -105,15 +118,16 @@ def db_search(dbf, words):
         words (dict): keys are words of length constant WORD_LEN, values are positions in the query sequence. generated using the seq_to_words() function
 
     Returns:
-        dict: keys are the sequence IDs, values are lists containing the target sequence, followed by double hits found in tuples with 
-            poss1 - position on sequence in first hit 
+        dict: keys are the sequence IDs, values are lists containing the target sequence, followed by double hits found in tuples with
+            poss1 - position on sequence in first hit
             posq1 - position on query in first hit
             poss2 - position on sequence in second hit
             posq2 - position on query in second hit
     """
     results = {'index': ('poss1', 'posq1', 'poss2', 'posq2')}
     for dbrecord in SeqIO.parse(dbf, "fasta"):
-        result = double_hit_finder(words, str(dbrecord.seq))
+        dbh = double_hit_finder(words, str(dbrecord.seq))
+        result = double_hit_fuser(dbh)
         results[dbrecord.id] = result
     return results
 
@@ -161,7 +175,6 @@ def alignment(seqq, seqt):
 
     max_score = 0
     max_pos = None
-
     # fill score and direction matrices
     for i in range(1, len(seqq) + 1):
         for j in range(1, len(seqt) + 1):
@@ -191,30 +204,31 @@ def alignment(seqq, seqt):
             if score_mat[i][j] >= max_score:
                 max_score = score_mat[i][j]
                 max_pos = (i, j)
-
-    # get the optimal alignment
     aseqq = []
     aseqt = []
-    i, j = max_pos
+    if max_score > 0:
+        # get the optimal alignment
 
-    while direction_mat[i][j] != STOP:
-        if direction_mat[i][j] == DIAG:
-            aseqq.append(seqq[i - 1])
-            aseqt.append(seqt[j - 1])
-            i -= 1
-            j -= 1
-        elif direction_mat[i][j] == UP:
-            aseqq.append(seqq[i - 1])
-            aseqt.append('-')
-            i -= 1
-        elif direction_mat[i][j] == LEFT:
-            aseqq.append('-')
-            aseqt.append(seqt[j - 1])
-            j -= 1
+        i, j = max_pos
 
-    aseqq = ''.join(reversed(aseqq))
-    aseqt = ''.join(reversed(aseqt))
-
+        while direction_mat[i][j] != STOP:
+            if direction_mat[i][j] == DIAG:
+                aseqq.append(seqq[i - 1])
+                aseqt.append(seqt[j - 1])
+                i -= 1
+                j -= 1
+            elif direction_mat[i][j] == UP:
+                aseqq.append(seqq[i - 1])
+                aseqt.append('-')
+                i -= 1
+            elif direction_mat[i][j] == LEFT:
+                aseqq.append('-')
+                aseqt.append(seqt[j - 1])
+                j -= 1
+        aseqq = ''.join(reversed(aseqq))
+        aseqt = ''.join(reversed(aseqt))
+        score = sum([aa_sub_score(aseqq[i], aseqt[i])
+                    for i in range(len(aseqq))])
     return aseqq, aseqt, max_score
 
 
@@ -223,19 +237,25 @@ def join(double_hit, seqq, seqt):
     length = poss2-poss1+WORD_LEN
     score = sum([aa_sub_score(seqq[posq1+i], seqt[poss1+i])
                 for i in range(0, length)])
-    return seqq[posq1:length], seqt[poss1:length], score, posq1, poss1
+    return seqq[posq1:posq1+length], seqt[poss1:poss1+length], score, posq1, poss1
 
 
 def extend(joined_alignment, seqq, seqt):
     jaseqq, jaseqt, score, posq1, poss1 = joined_alignment
     # to the left
-    rlseqq = seqq[posq1::-1]
-    rlseqt = seqt[poss1::-1]
-    laseqq, laseqt, lascore = alignment(rlseqq, rlseqt)
+    rlseqq = seqq[max(posq1-1, 0)::-1]
+    rlseqt = seqt[max(poss1-1, 0)::-1]
+    if (len(rlseqq) < 2) or (len(rlseqt) < 2):
+        laseqq, laseqt, lascore = '', '', 0
+    else:
+        laseqq, laseqt, lascore = alignment(rlseqq, rlseqt)
     # to the right
     rseqq = seqq[posq1+len(jaseqq):]
     rseqt = seqt[poss1+len(jaseqq):]
-    raseqq, raseqt, rascore = alignment(rseqq, rseqt)
+    if (len(rseqq) < 2) or (len(rseqt) < 2):
+        raseqq, raseqt, rascore = '', '', 0
+    else:
+        raseqq, raseqt, rascore = alignment(rseqq, rseqt)
     # final alignement
     aseqq = laseqq[::-1] + jaseqq + raseqq
     aseqt = laseqt[::-1] + jaseqt + raseqt
@@ -264,8 +284,8 @@ def print_blast_alignment(query, subject, query_start, subject_start):
     subject_start -- Starting position of the subject (db sequence) in the alignment.
     """
     line_length = 60  # Maximum number of characters per line for display
-    query_pos = query_start
-    subject_pos = subject_start
+    query_pos = query_start+1
+    subject_pos = subject_start+1
 
     for i in range(0, len(query), line_length):
         # Get current segment of the alignment
@@ -320,12 +340,14 @@ def run_blast(fastaf, dbf):
         alignments[seqid] = best_alignment
         nb_seq_aligned += 1
         if nb_seq_aligned % 20 == 0:
-            print(nb_seq_aligned)
+            print(f"Please be patient! Already {
+                  nb_seq_aligned} sequences aligned!")
     # show results
     for key, values in alignments.items():
         aseqq, aseqt, posq, poss, score, evalue = values
         print(f"Sequence : {key}, score : {score}, evalue : {evalue}")
         print_blast_alignment(aseqq, aseqt, posq, poss)
+
     return alignments
 
 
