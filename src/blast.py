@@ -170,7 +170,7 @@ def e_value(norm_score, N):
 
     Args:
         norm_score (float): normalized alignment score with noramized_score() function
-        N (int): result of the multiplication of the lengths of the aligned sequences
+        N (int): result of the multiplication of the lengths of the sequences
 
     Returns:
         float: e-value
@@ -187,8 +187,8 @@ def alignment(seqq, seqt):
         seqt (str): subject sequence
 
     Returns:
-        tuple: contains the query sequence alignment sequence (gaps as '_'), 
-                the subject sequence alignment sequence (gaps as '_')
+        tuple: contains the query sequence alignment sequence (gaps as '-'), 
+                the subject sequence alignment sequence (gaps as '-')
                 the score of the alignment
     """
     score_mat = np.zeros((len(seqq) + 1, len(seqt) + 1))
@@ -310,8 +310,8 @@ def extend(joined_alignment, seqq, seqt):
     aseqq = laseqq[::-1] + jaseqq + raseqq
     aseqt = laseqt[::-1] + jaseqt + raseqt
     score = score + lascore + rascore
-    posq = posq1 - len(laseqq.replace('_', ''))
-    poss = poss1 - len(laseqt.replace('_', ''))
+    posq = posq1 - len(laseqq.replace('-', ''))
+    poss = poss1 - len(laseqt.replace('-', ''))
     return aseqq, aseqt, posq, poss, score
 
 
@@ -341,10 +341,8 @@ def order_by_score(alignments):
                 - int : position of alignment on query sequence
                 - int : position of alignment on subject sequence
                 - int : alignment score
-                - float : normalized alignment score
-                - float : evalue
     Returns:
-        dict: same dict as given but ordered in decreasing score values
+        list: list containing tuples with (sequence_id (str), score (int)) ordered by decreasing score
     """
     trans_list = []
     for key, values in alignments.items():
@@ -374,22 +372,22 @@ def print_blast_alignment(query, subject, query_start, subject_start):
         # Generate match line: "|" for exact matches, ":" for conservative, " " for mismatches or gaps
         match_line = ''.join(
             ['|' if query_slice[j] == subject_slice[j]
-             else ':' if query_slice[j] != '_' and subject_slice[j] != '_' and are_similar(query_slice[j], subject_slice[j])
+             else ':' if query_slice[j] != '-' and subject_slice[j] != '-' and are_similar(query_slice[j], subject_slice[j])
              else ' '
              for j in range(len(query_slice))])
 
         # Print query line with one space at the beginning for alignment
         print(f"Query   {query_pos:<4}  {query_slice}\
-              {query_pos + query_slice.replace('_', '').count('') - 1}")
-        query_pos += len(query_slice.replace('_', ''))
+              {query_pos + query_slice.replace('-', '').count('') - 1}")
+        query_pos += len(query_slice.replace('-', ''))
 
         # Print match line with one less space to align with sequences
         print(f"              {match_line}")
 
         # Print subject line, showing gaps and using the actual position for the non-gap characters
         print(f"Subject {subject_pos:<4}  {subject_slice}\
-              {subject_pos + subject_slice.replace('_', '').count('') - 1}")
-        subject_pos += len(subject_slice.replace('_', ''))
+              {subject_pos + subject_slice.replace('-', '').count('') - 1}")
+        subject_pos += len(subject_slice.replace('-', ''))
 
         print()  # Blank line between alignment blocks
 
@@ -423,6 +421,7 @@ def run_blast(fastaf, dbf):
     nb_seq_aligned = 0
     for seqid, values in db_hits.items():
         max_score = 0
+        best_alignment = None
         for dbh in values[1:]:
             seqt = values[0]
             jalignment = join(dbh, seq, seqt)
@@ -433,8 +432,9 @@ def run_blast(fastaf, dbf):
                 max_score = norm_score
                 evalue = e_value(norm_score, len(alignment[0]))
                 best_alignment = alignment + (norm_score, evalue)
-        alignments[seqid] = best_alignment
-        nb_seq_aligned += 1
+            if best_alignment is not:
+                alignments[seqid] = best_alignment
+                nb_seq_aligned += 1
         if nb_seq_aligned % 20 == 0:
             print(f"Please be patient! Already \
                 {nb_seq_aligned} sequences aligned!")
@@ -444,7 +444,7 @@ def run_blast(fastaf, dbf):
     for ids in ordered_ids[0:99]:
         aseqq, aseqt, posq, poss, score, norm_score, evalue = alignments[ids[0]]
         print(f"Sequence : {ids[0]}, \
-            score : {norm_score:.2f} bits ({score}), evalue : {evalue:.2f}")
+            score : {norm_score:.2f} bits ({score}), evalue : {evalue}")
         print_blast_alignment(aseqq, aseqt, posq, poss)
     print()
     for ids in ordered_ids:
