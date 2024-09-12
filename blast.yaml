@@ -1,4 +1,4 @@
-name: blast
+name: blast_siann
 channels:
     - conda-forge
     - bioconda
@@ -8,6 +8,6 @@ dependencies:
     - biopython
     - scipy
     - numpy
-    - jupiter
+    - jupyter
     - pandas
 

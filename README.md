@@ -6,7 +6,7 @@ After cloning the github repository, you will need to install the conda environm
 conda env create -f blast.yaml
 ```
 ```
-conda activate blast
+conda activate blast_siann
 ```
 
 # Usage
@@ -21,7 +21,7 @@ python3 src/blast.py data/name_of_sequence_file.fasta data/name_of_db_file.fasta
 You can test out the package with the sample data : 
 
 ```
-python3 src/blast.py data/P06007.fasta data/photosysII_chlamydomonas.fasta > results/chlamydomonasdb.txt
+python3 src/blast.py data/P06007.fasta data/photosystem_viruses_archea.fasta > results/test_results.txt
 ```
 
 # Search parameters

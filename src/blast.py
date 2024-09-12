@@ -443,8 +443,8 @@ def run_blast(fastaf, dbf):
     print()
     for ids in ordered_ids[0:99]:
         aseqq, aseqt, posq, poss, score, norm_score, evalue = alignments[ids[0]]
-        print(f"Sequence : {ids[0]}, score : \
-            {norm_score:.2f} bits ({score}), evalue : {evalue:.2f}")
+        print(f"Sequence : {ids[0]}, \
+            score : {norm_score:.2f} bits ({score}), evalue : {evalue:.2f}")
         print_blast_alignment(aseqq, aseqt, posq, poss)
     print()
     for ids in ordered_ids:
