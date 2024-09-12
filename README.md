@@ -19,7 +19,7 @@ You can test out the package with the sample data :
 
 # Search parameters
 
-Currently, the search parameters can be changer in the blast.py script in the 7 to 14 first lines of the code
+Currently, the search parameters can be changed in the blast.py script in the 7 to 14 first lines of the code
 
 # Output
 
