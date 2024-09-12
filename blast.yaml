@@ -6,4 +6,8 @@ channels:
 dependencies:
     - python
     - biopython
+    - scipy
+    - numpy
+    - jupiter
+    - pandas
 
