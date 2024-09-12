@@ -9,8 +9,8 @@ T_SCORE = 13
 MAX_HITS_GAP_LEN = 40
 l = 0.3
 K = 0.13
-GAP_PENALTY = 11
-GAP_EXT_PENALTY = 1
+GAP_PENALTY = -11
+GAP_EXT_PENALTY = -1
 
 # Constants
 MATRIX = Bio.Align.substitution_matrices.load('BLOSUM62')
@@ -25,7 +25,7 @@ similar_groups = [
 
 
 def aa_sub_score(aa1, aa2):
-    """Get the T score of substitution depending on the provided MATRIX
+    """Get the score of substitution depending on the provided MATRIX
 
     Args:
         aa1 (str): first amino acid
@@ -50,7 +50,8 @@ def seq_to_words(seq):
         fastaf (str): path to fasta file containing the sequence to be searched
 
     Returns:
-        dict: keys are the words obtained from the sequence, and value is the position in the sequence of the first letter of the word
+        dict: keys are the words obtained from the sequence, and value is the position in 
+        the sequence of the first letter of the word
     """
 
     words = {}
@@ -65,10 +66,13 @@ def seq_to_words(seq):
 
 
 def double_hit_finder(words, seq):
-    """Get all non over-lapping, double hits with maximum distance between first position of hit of MAX_HITS_GAP_LEN.
+    """Get all non over-lapping, double hits with maximum distance 
+    between first position of hit of MAX_HITS_GAP_LEN.
 
     Args:
-        words (dict): keys are words of length constant WORD_LEN, values are positions in the query sequence. generated using the seq_to_words() function
+        words (dict): keys are words of length constant WORD_LEN, 
+        values are positions in the query sequence. 
+        generated using the seq_to_words() function
         seq (str): sequence to find hits in
     Returns:
         list: list of all double hits found in seq in the form of a tuple with
@@ -98,6 +102,18 @@ def double_hit_finder(words, seq):
 
 
 def double_hit_fuser(double_hits):
+    """Fuses together clusters of double hits on same diagonal
+
+    Args:
+        double_hits (tuple): output from double_hit_finder()
+
+    Returns:
+        tuple: (
+            - int : position of first hit on subject sequence
+            - int : position of first hit on query sequence
+            - int : position of last hit on subject sequence
+            - int : position of last hit on query sequence)
+    """
     i = 2
     while i < len(double_hits):
         poss1_1, posq1_1, poss2_1, posq2_1 = double_hits[i-1]
@@ -115,10 +131,14 @@ def db_search(dbf, words):
 
     Args:
         dbf (str): path to fasta file containing the db
-        words (dict): keys are words of length constant WORD_LEN, values are positions in the query sequence. generated using the seq_to_words() function
+        words (dict): keys are words of length constant WORD_LEN, 
+        values are positions in the query sequence.
+        generated using the seq_to_words() function
 
     Returns:
-        dict: keys are the sequence IDs, values are lists containing the target sequence, followed by double hits found in tuples with
+        dict: keys are the sequence IDs, 
+        values are lists containing the target sequence, 
+        followed by double hits found in tuples with
             poss1 - position on sequence in first hit
             posq1 - position on query in first hit
             poss2 - position on sequence in second hit
@@ -158,16 +178,18 @@ def e_value(norm_score, N):
 
 
 def alignment(seqq, seqt):
-    """_summary_
+    """Aligns provided sequence based on Smith and Waterman algorithm
+    The best local alignment is kept
 
     Args:
-        seqq (_type_): _description_
-        seqt (_type_): _description_
+        seqq (str): query sequence
+        seqt (str): subject sequence
 
     Returns:
-        _type_: _description_
+        tuple: contains the query sequence alignment sequence (gaps as '_'), 
+                the subject sequence alignment sequence (gaps as '_')
+                the score of the alignment
     """
-
     score_mat = np.zeros((len(seqq) + 1, len(seqt) + 1))
     direction_mat = np.zeros((len(seqq) + 1, len(seqt) + 1), dtype=int)
 
@@ -178,7 +200,6 @@ def alignment(seqq, seqt):
     # fill score and direction matrices
     for i in range(1, len(seqq) + 1):
         for j in range(1, len(seqt) + 1):
-
             # scores for substitution deletion and insertion
             sub = score_mat[i-1, j-1] + \
                 aa_sub_score(seqq[i-1], seqt[j-1])
@@ -189,11 +210,9 @@ def alignment(seqq, seqt):
                 (GAP_EXT_PENALTY if (
                     direction_mat[i-1, j] == 1) else GAP_PENALTY)
 
-            score_mat[i][j] = max(0, sub, dele, ins)
+            score_mat[i][j] = max(sub, dele, ins)
 
-            if score_mat[i][j] == 0:
-                direction_mat[i][j] = STOP
-            elif score_mat[i][j] == sub:
+            if score_mat[i][j] == sub:
                 direction_mat[i][j] = DIAG
             elif score_mat[i][j] == dele:
                 direction_mat[i][j] = UP
@@ -206,12 +225,13 @@ def alignment(seqq, seqt):
                 max_pos = (i, j)
     aseqq = []
     aseqt = []
+    score = score_mat[i][j]
     if max_score > 0:
         # get the optimal alignment
 
         i, j = max_pos
 
-        while direction_mat[i][j] != STOP:
+        while (i != 0) & (j != 0):
             if direction_mat[i][j] == DIAG:
                 aseqq.append(seqq[i - 1])
                 aseqt.append(seqt[j - 1])
@@ -227,12 +247,26 @@ def alignment(seqq, seqt):
                 j -= 1
         aseqq = ''.join(reversed(aseqq))
         aseqt = ''.join(reversed(aseqt))
-        score = sum([aa_sub_score(aseqq[i], aseqt[i])
-                    for i in range(len(aseqq))])
-    return aseqq, aseqt, max_score
+
+    return aseqq, aseqt, score
 
 
 def join(double_hit, seqq, seqt):
+    """Joins the hits of a double hit and gives their alignment score
+
+    Args:
+        double_hit (tuple): output from double_hit_finder()
+        seqq (str): query sequence
+        seqt (str): target sequence
+
+    Returns:
+        tuple: contains 
+                - str : aligned sequence of query sequence
+                - str : aligned sequence of subject sequence
+                - int : alignment score
+                - int : position of alignment on query sequence
+                - int : position of alignment on subject sequence
+    """
     poss1, posq1, poss2, posq2 = double_hit
     length = poss2-poss1+WORD_LEN
     score = sum([aa_sub_score(seqq[posq1+i], seqt[poss1+i])
@@ -241,6 +275,21 @@ def join(double_hit, seqq, seqt):
 
 
 def extend(joined_alignment, seqq, seqt):
+    """Extends an existing alignment with the Smith and Waterman algorithm
+
+    Args:
+        joined_alignment (tuple): output from join() function
+        seqq (str): query sequence
+        seqt (str): target sequence
+
+    Returns:
+        tuple: contains 
+                - str : aligned sequence of query sequence
+                - str : aligned sequence of subject sequence
+                - int : position of alignment on query sequence
+                - int : position of alignment on subject sequence
+                - int : alignment score
+    """
     jaseqq, jaseqt, score, posq1, poss1 = joined_alignment
     # to the left
     rlseqq = seqq[max(posq1-1, 0)::-1]
@@ -266,22 +315,51 @@ def extend(joined_alignment, seqq, seqt):
 
 
 def are_similar(aa1, aa2):
-    """Returns True if a substitution is conservative, False otherwise."""
+    """Returns True if a substitution is conservative, False otherwise.
+
+    Args:
+        aa1 (str): first amino acid
+        aa2 (str): second amino acid
+
+    Returns:
+        boolean : True or False depending on similarity
+    """
     for group in similar_groups:
         if aa1 in group and aa2 in group:
             return True
     return False
 
 
-def print_blast_alignment(query, subject, query_start, subject_start):
-    """
-    Prints the alignment of two protein sequences.
+def order_by_score(alignments):
+    """Sort alignments depending on score (decreasing order) 
 
-    Parameters:
-    query -- Query protein sequence with alignment gaps ("_").
-    subject -- Subject protein sequence with alignment gaps.
-    query_start -- Starting position of the query in the alignment.
-    subject_start -- Starting position of the subject (db sequence) in the alignment.
+    Args:
+        alignments (dict): keys are sequence IDs, values are a tuple containing :
+                - str : aligned sequence of query sequence
+                - str : aligned sequence of subject sequence
+                - int : position of alignment on query sequence
+                - int : position of alignment on subject sequence
+                - int : alignment score
+                - float : normalized alignment score
+                - float : evalue
+    Returns:
+        dict: same dict as given but ordered in decreasing score values
+    """
+    trans_list = []
+    for key, values in alignments.items():
+        trans_list.append(tuple((key, values[4])))
+    trans_list.sort(key=lambda a: a[1], reverse=True)
+    return trans_list
+
+
+def print_blast_alignment(query, subject, query_start, subject_start):
+    """Prints the alignment of two protein sequences.
+
+    Args:
+        query (str) : query protein sequence with alignment gaps ("_").
+        subject (str) : subject protein sequence with alignment gaps.
+        query_start (int) : starting position of the query in the alignment.
+        subject_start (int) : starting position of the subject (db sequence) in the alignment.
     """
     line_length = 60  # Maximum number of characters per line for display
     query_pos = query_start+1
@@ -316,6 +394,23 @@ def print_blast_alignment(query, subject, query_start, subject_start):
 
 
 def run_blast(fastaf, dbf):
+    """Main function of the programm that runs the whole BLAST process
+
+    Args:
+        fastaf (str): path to the query sequence fasta file
+        dbf (str): path to the database in fasta format
+
+    Returns:
+        dict: alignments with sequence IDs as keys an values contain a tuple with :
+                - str : aligned sequence of query sequence
+                - str : aligned sequence of subject sequence
+                - int : position of alignment on query sequence
+                - int : position of alignment on subject sequence
+                - int : alignment score
+                - float : normalized alignment score
+                - float : evalue
+    """
+
     records = list(SeqIO.parse(fastaf, "fasta"))
     if len(records) > 2:
         print("The fasta file provided as query contains more than one sequence. The first sequence of the file will be used for the blast search.")
@@ -336,21 +431,26 @@ def run_blast(fastaf, dbf):
             if norm_score > max_score:
                 max_score = norm_score
                 evalue = e_value(norm_score, len(alignment[0]))
-                best_alignment = alignment + (evalue,)
+                best_alignment = alignment + (norm_score, evalue)
         alignments[seqid] = best_alignment
         nb_seq_aligned += 1
         if nb_seq_aligned % 20 == 0:
             print(f"Please be patient! Already {
                   nb_seq_aligned} sequences aligned!")
     # show results
-    for key, values in alignments.items():
-        aseqq, aseqt, posq, poss, score, evalue = values
-        print(f"Sequence : {key}, score : {score}, evalue : {evalue}")
+    ordered_ids = order_by_score(alignments)
+    for ids in ordered_ids[0:99]:
+        aseqq, aseqt, posq, poss, score, norm_score, evalue = alignments[ids[0]]
+        print(f"Sequence : {ids[0]}, score : \
+            {norm_score:.2f} bits ({score}), evalue : {evalue:.2f}")
         print_blast_alignment(aseqq, aseqt, posq, poss)
+    print()
+    for ids in ordered_ids:
+        print(f"{ids[0]},{alignments[ids[0]][5]:.2f},{alignments[ids[0]][6]}")
 
     return alignments
 
 
 if __name__ == "__main__":
-    # run_blast("data/P06007.fasta", "data/photosystem_viruses_archea.fasta")
-    run_blast("data/smallseq.fasta", "data/smalldb.fasta")
+    run_blast("data/P06007.fasta", "data/photosystem_viruses_archea.fasta")
+    # run_blast("data/smallseq.fasta", "data/smalldb.fasta")
